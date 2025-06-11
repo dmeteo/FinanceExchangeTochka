@@ -47,8 +47,3 @@ app.include_router(public.router)
 app.include_router(balance.router)
 app.include_router(orders.router)
 app.include_router(admin.router)
-
-@app.on_event("startup")
-async def startup():
-    # Инициализация RabbitMQ и других сервисов
-    pass
