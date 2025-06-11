@@ -9,6 +9,12 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
     def __init__(self):
         super().__init__(Order)
 
+    async def get_by_user(self, db: AsyncSession, user_id) -> list[Order]:
+        result = await db.execute(
+            select(Order).where(Order.user_id == user_id)
+        )
+        return result.scalars().all()
+
     async def get_user_orders(self, db: AsyncSession, user_id: UUID):
         result = await db.execute(
             select(Order).where(
@@ -17,6 +23,9 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
             )
         )
         return result.scalars().all()
+    
+    async def get(self, db: AsyncSession, order_id: UUID) -> Order | None:
+        return await db.get(Order, order_id)
 
     async def cancel(self, db: AsyncSession, order: Order):
         order.status = OrderStatus.CANCELLED

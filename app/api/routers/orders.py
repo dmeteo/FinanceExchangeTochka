@@ -1,10 +1,11 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 from typing import Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.schemas.order import LimitOrderBody, MarketOrderBody, CreateOrderResponse
+from app.core.schemas.common import Ok
+from core.schemas.order import LimitOrderBody, MarketOrderBody, CreateOrderResponse, OrderResponse
 from core.models.order import Order, OrderStatus
 from repositories.order import OrderRepository
 from repositories.balance import BalanceRepository
@@ -19,6 +20,41 @@ order_repo = OrderRepository()
 balance_repo = BalanceRepository()
 instrument_repo = InstrumentRepository()
 
+
+@router.get("/", response_model=list[OrderResponse])
+async def get_orders(
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    return await order_repo.get_by_user(db, user.id)
+
+@router.get("/{order_id}", response_model=OrderResponse)
+async def get_order(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    order = await order_repo.get(db, order_id)
+    if not order or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+@router.delete("/{order_id}", response_model=Ok)
+async def cancel_order(
+    order_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    order = await order_repo.get(db, order_id)
+    if not order or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
+        raise HTTPException(status_code=400, detail="Only NEW or PARTIALLY_EXECUTED orders can be cancelled")
+
+    await order_repo.cancel(db, order)
+    return {"success": True}
+
+
 @router.post("/", response_model=CreateOrderResponse)
 async def create_order(
     body: Union[LimitOrderBody, MarketOrderBody],
@@ -27,7 +63,6 @@ async def create_order(
 ):
     ticker = body.ticker.upper()
 
-    # 1. Проверка инструмента
     instrument = await instrument_repo.get_by_ticker(db, ticker)
     if not instrument:
         raise HTTPException(status_code=404, detail="Instrument not found")
@@ -36,7 +71,6 @@ async def create_order(
     matcher = OrderMatchingService(order_repo, balance_repo)
 
     if isinstance(body, LimitOrderBody):
-        # 2. Проверка баланса и резерв
         if body.direction == "BUY":
             total = body.qty * body.price
             rub_balance = await balance_repo.get_balance(db, user.id, "RUB")
@@ -49,7 +83,6 @@ async def create_order(
                 raise HTTPException(status_code=400, detail="Insufficient asset balance")
             asset_balance.amount -= body.qty
 
-        # 3. Сохранение лимитной заявки
         order = Order(
             id=order_id,
             user_id=user.id,
@@ -64,13 +97,11 @@ async def create_order(
         db.add(order)
         await db.commit()
 
-        # 4. Передаём в matching engine (Celery)
         match_order_task.delay(str(order.id))
 
         return {"success": True, "order_id": order.id}
 
     else:
-        # Market Order — исполняется немедленно, не попадает в orderbook
         order = Order(
             id=order_id,
             user_id=user.id,

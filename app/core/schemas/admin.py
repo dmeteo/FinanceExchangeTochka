@@ -19,6 +19,3 @@ class WithdrawRequest(BaseModel):
                 "amount": 500
             }
         }
-
-class Ok(BaseModel):
-    success: bool = True
