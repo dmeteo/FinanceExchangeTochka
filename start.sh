@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-echo "⏳ Waiting for PostgreSQL..."
+echo "Waiting for PostgreSQL..."
 ./wait_alembic.sh db
 
-echo "🛠 Running Alembic migrations..."
+echo "Running Alembic migrations..."
 alembic upgrade head
 
 echo "Starting FastAPI..."
