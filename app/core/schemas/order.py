@@ -29,13 +29,13 @@ class CreateOrderResponse(BaseModel):
 class LimitOrderBody(BaseModel):
     direction: Direction
     ticker: str
-    qty: int = Field(..., gt=0)
-    price: int = Field(..., gt=0)
+    qty: int = Field(..., gt=0, le=1_000_000_000)
+    price: int = Field(..., gt=0, le=1_000_000_000)
 
 class MarketOrderBody(BaseModel):
     direction: Direction
     ticker: str
-    qty: int = Field(..., gt=0)
+    qty: int = Field(..., gt=0, le=1_000_000_000)
 
 class Order(BaseModel):
     id: UUID4
