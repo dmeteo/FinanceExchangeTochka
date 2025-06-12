@@ -8,4 +8,7 @@ echo "Running Alembic migrations..."
 alembic upgrade head
 
 echo "Starting FastAPI..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $(nproc)
+exec gunicorn app.main:app \
+  -k uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:8000 \
+  --workers $(nproc)

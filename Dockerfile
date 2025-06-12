@@ -12,4 +12,4 @@ RUN chmod +x start.sh wait_alembic.sh
 
 ENV PYTHONPATH=/app/app
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./start.sh"]
