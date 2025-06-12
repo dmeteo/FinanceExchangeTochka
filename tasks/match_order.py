@@ -14,7 +14,6 @@ def match_order_task(order_id: str):
     else:
         loop.run_until_complete(_inner(order_id))
 
-
 async def _inner(order_id: str):
     async with async_session() as db:
         order_repo = OrderRepository()
