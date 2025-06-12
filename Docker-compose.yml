@@ -8,10 +8,8 @@ services:
     restart: always
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_USER: Tochka
-      POSTGRES_PASSWORD: 123123
-      POSTGRES_DB: Tochka
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -32,9 +30,8 @@ services:
     depends_on:
       - db
       - redis
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://Tochka:123123@db:5432/Tochka
-      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
 
   alembic:
     build: .
@@ -44,21 +41,20 @@ services:
       - .:/app
     depends_on:
       - db
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://Tochka:123123@db:5432/Tochka
+    env_file:
+      - .env
 
   worker:
     build: .
     container_name: celery_worker
-    command: celery -A celery_app worker --loglevel=info -Q matching
+    command: celery -A celery_app worker --loglevel=info -Q matching 
     volumes:
       - .:/app
     depends_on:
       - redis
       - db
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://Tochka:123123@db:5432/Tochka
-      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
 
 volumes:
   postgres_data:

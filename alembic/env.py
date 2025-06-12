@@ -1,7 +1,12 @@
 import asyncio
+import os
 import sys
 from pathlib import Path
 from logging.config import fileConfig
+
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.append(str(Path(__file__).parent.parent / "app"))

@@ -38,7 +38,7 @@ async def register_user(
 async def get_orderbook(ticker: str, limit: int = 10, db: AsyncSession = Depends(get_db)):
     bids = await order_repo.get_bids(db, ticker, limit)
     asks = await order_repo.get_asks(db, ticker, limit)
-
+    
     return L2OrderBook(
         bid_levels=[OrderBookLevel(price=o.price, qty=o.qty - o.filled) for o in bids],
         ask_levels=[OrderBookLevel(price=o.price, qty=o.qty - o.filled) for o in asks]
@@ -56,4 +56,4 @@ async def get_transactions(
 @router.get("/instrument", response_model=list[Instrument])
 async def list_instruments(db: AsyncSession = Depends(get_db)):
     instruments = await instrument_repo.get_all(db)
-    return [Instrument.from_form(i) for i in instruments]
+    return [Instrument.model_validate(i) for i in instruments]

@@ -2,6 +2,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from app.core.exceptions import InsufficientBalanceException
 from core.models.balance import Balance
 
 class BalanceRepository:
@@ -16,36 +17,26 @@ class BalanceRepository:
         )
         return result.scalars().all()
     
-    async def deposit(
-        self, db: AsyncSession, user_id: UUID, ticker: str, amount: int
-    ):
+    async def get_balance(self, db: AsyncSession, user_id: UUID, ticker: str) -> Balance | None:
         result = await db.execute(
-            select(Balance).where(
-                Balance.user_id == user_id,
-                Balance.ticker == ticker,
-            )
+            select(Balance).where(Balance.user_id == user_id, Balance.ticker == ticker)
         )
-        balance = result.scalars().first()
-
+        return result.scalars().first()
+    
+    async def deposit(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        balance = await self.get_balance(db, user_id, ticker)
         if balance:
             balance.amount += amount
         else:
-            balance = Balance(user_id=user_id, ticker=ticker, amount=amount)
+            balance = Balance(user_id=user_id, ticker=ticker, amount=amount, frozen=0)
             db.add(balance)
+        db.add(balance)
 
-        await db.commit()
-        await db.refresh(balance)
 
     async def withdraw(
     self, db: AsyncSession, user_id: UUID, ticker: str, amount: int
     ):
-        result = await db.execute(
-            select(Balance).where(
-                Balance.user_id == user_id,
-                Balance.ticker == ticker,
-            )
-        )
-        balance = result.scalars().first()
+        balance = await self.get_balance(db, user_id, ticker)
         if not balance:
             raise HTTPException(status_code=404, detail="Balance entry not found")
 
@@ -53,14 +44,6 @@ class BalanceRepository:
             raise HTTPException(status_code=400, detail="Insufficient funds")
 
         balance.amount -= amount
-        await db.commit()
-        await db.refresh(balance)
-
-    async def get_balance(self, db: AsyncSession, user_id: UUID, ticker: str) -> Balance | None:
-        result = await db.execute(
-            select(Balance).where(Balance.user_id == user_id, Balance.ticker == ticker)
-        )
-        return result.scalars().first()
     
     async def transfer(
         self,
@@ -69,13 +52,12 @@ class BalanceRepository:
         to_user_id: UUID,
         ticker: str,
         qty: int,
-        price: int
     ):
         from_balance = await self.get_balance(db, from_user_id, ticker)
         to_balance = await self.get_balance(db, to_user_id, ticker)
 
         if not from_balance or from_balance.amount < qty:
-            raise HTTPException(status_code=400, detail="Insufficient balance for transfer")
+            raise InsufficientBalanceException()
 
         from_balance.amount -= qty
 
@@ -88,4 +70,25 @@ class BalanceRepository:
         db.add(from_balance)
         db.add(to_balance)
 
-    
+    async def freeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        balance = await self.get_balance(db, user_id, ticker)
+        if not balance or balance.amount < amount:
+            raise InsufficientBalanceException("Недостаточно средств для резервации")
+        balance.amount -= amount
+        balance.frozen += amount
+        db.add(balance)
+
+    async def unfreeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        balance = await self.get_balance(db, user_id, ticker)
+        if not balance or balance.frozen < amount:
+            raise InsufficientBalanceException("Недостаточно замороженного баланса")
+        balance.amount += amount
+        balance.frozen -= amount
+        db.add(balance)
+
+    async def spend_frozen(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        balance = await self.get_balance(db, user_id, ticker)
+        if not balance or balance.frozen < amount:
+            raise InsufficientBalanceException("Недостаточно замороженного баланса для списания")
+        balance.frozen -= amount
+        db.add(balance)

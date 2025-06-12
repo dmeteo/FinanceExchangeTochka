@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
+from app.core.exceptions import InsufficientBalanceException
 from core.models.order import Order, OrderStatus
 from core.models.transaction import Transaction
 from repositories.order import OrderRepository
@@ -16,24 +16,23 @@ class OrderMatchingService:
 
         base_query = select(Order).where(
             Order.ticker == order.ticker,
-            Order.status == OrderStatus.NEW,
+            Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
             Order.direction != order.direction,
         )
 
-        # Добавляем проверку на цену — только если она есть
         if order.price is not None:
             price_condition = (
                 Order.price <= order.price if is_buy else Order.price >= order.price
             )
             base_query = base_query.where(price_condition)
 
+        base_query = base_query.with_for_update()
         base_query = base_query.order_by(
             Order.price.asc() if is_buy else Order.price.desc()
         )
 
         result = await db.execute(base_query)
         candidates = result.scalars().all()
-
         remaining_qty = order.qty
 
         for match in candidates:
@@ -44,43 +43,49 @@ class OrderMatchingService:
             if trade_qty <= 0 or trade_price is None:
                 continue
 
+            buy_order = order if is_buy else match
+            sell_order = match if is_buy else order
+            buyer_id = buy_order.user_id
+            seller_id = sell_order.user_id
+
+            await self.balance_repo.spend_frozen(db, buyer_id, "RUB", trade_qty * trade_price)
+            await self.balance_repo.deposit(db, buyer_id, order.ticker, trade_qty)
+
+            await self.balance_repo.spend_frozen(db, seller_id, order.ticker, trade_qty)
+            await self.balance_repo.deposit(db, seller_id, "RUB", trade_qty * trade_price)
+
             transaction = Transaction(
-                buy_order_id=order.id if is_buy else match.id,
-                sell_order_id=match.id if is_buy else order.id,
+                buy_order_id=buy_order.id,
+                sell_order_id=sell_order.id,
                 ticker=order.ticker,
                 amount=trade_qty,
-                price=trade_price
-            )
-
-            await self.balance_repo.transfer(
-                db,
-                from_user_id=match.user_id if is_buy else order.user_id,
-                to_user_id=order.user_id if is_buy else match.user_id,
-                ticker=order.ticker,
-                qty=trade_qty,
                 price=trade_price
             )
 
             order.filled += trade_qty
             match.filled += trade_qty
 
-            if match.filled == match.qty:
-                match.status = OrderStatus.EXECUTED
+            match.status = update_status(match)
 
             db.add(transaction)
             db.add(match)
+            print(f"match: {match.id}, filled={match.filled}, status={match.status}")
 
             remaining_qty -= trade_qty
             if remaining_qty <= 0:
                 break
 
-        if order.filled == 0:
-            order.status = OrderStatus.CANCELLED
-        elif order.filled < order.qty:
-            order.status = OrderStatus.PARTIALLY_EXECUTED
-        else:
-            order.status = OrderStatus.EXECUTED
+        order.status = update_status(order)
 
         db.add(order)
         await db.commit()
 
+
+def update_status(order):
+    print(f"order.id={order.id} qty={order.qty} filled={order.filled} -> status={order.status}")
+    if order.filled == 0:
+        return OrderStatus.NEW
+    elif order.filled < order.qty:
+        return OrderStatus.PARTIALLY_EXECUTED
+    else:
+        return OrderStatus.EXECUTED

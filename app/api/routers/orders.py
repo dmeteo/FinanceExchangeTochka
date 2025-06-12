@@ -4,8 +4,9 @@ from typing import Union
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import InsufficientBalanceException
 from app.core.schemas.common import Ok
-from core.schemas.order import LimitOrderBody, MarketOrderBody, CreateOrderResponse, OrderResponse
+from core.schemas.order import LimitOrder, LimitOrderBody, MarketOrder, MarketOrderBody, CreateOrderResponse, OrderResponse
 from core.models.order import Order, OrderStatus
 from repositories.order import OrderRepository
 from repositories.balance import BalanceRepository
@@ -26,7 +27,8 @@ async def get_orders(
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user)
 ):
-    return await order_repo.get_by_user(db, user.id)
+    orders = await order_repo.get_user_orders(db, user.id)
+    return [_build_order_response(order) for order in orders]
 
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(
@@ -37,7 +39,36 @@ async def get_order(
     order = await order_repo.get(db, order_id)
     if not order or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found")
-    return order
+    return _build_order_response(order)
+
+def _build_order_response(order):
+    if order.price is not None:
+        return LimitOrder(
+            id=order.id,
+            status=order.status,
+            user_id=order.user_id,
+            timestamp=order.created_at,
+            filled=order.filled,
+            body=LimitOrderBody(
+                direction=order.direction,
+                ticker=order.ticker,
+                qty=order.qty,
+                price=order.price
+            )
+        )
+    else:
+        return MarketOrder(
+            id=order.id,
+            status=order.status,
+            user_id=order.user_id,
+            timestamp=order.created_at,
+            filled=order.filled,
+            body=MarketOrderBody(
+                direction=order.direction,
+                ticker=order.ticker,
+                qty=order.qty
+            )
+        )
 
 @router.delete("/{order_id}", response_model=Ok)
 async def cancel_order(
@@ -51,6 +82,12 @@ async def cancel_order(
     if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
         raise HTTPException(status_code=400, detail="Only NEW or PARTIALLY_EXECUTED orders can be cancelled")
 
+    remaining_qty = order.qty - order.filled
+    if remaining_qty > 0:
+        if order.direction == "BUY":
+            await balance_repo.unfreeze(db, order.user_id, "RUB", remaining_qty * (order.price or 1))
+        else:
+            await balance_repo.unfreeze(db, order.user_id, order.ticker, remaining_qty)
     await order_repo.cancel(db, order)
     return {"success": True}
 
@@ -62,63 +99,43 @@ async def create_order(
     user = Depends(get_current_user)
 ):
     ticker = body.ticker.upper()
-
     instrument = await instrument_repo.get_by_ticker(db, ticker)
     if not instrument:
         raise HTTPException(status_code=404, detail="Instrument not found")
-
     order_id = uuid4()
-    matcher = OrderMatchingService(order_repo, balance_repo)
 
-    if isinstance(body, LimitOrderBody):
-        if body.direction == "BUY":
-            total = body.qty * body.price
-            rub_balance = await balance_repo.get_balance(db, user.id, "RUB")
-            if not rub_balance or rub_balance.amount < total:
-                raise HTTPException(status_code=400, detail="Insufficient RUB balance")
-            rub_balance.amount -= total
-        else:
-            asset_balance = await balance_repo.get_balance(db, user.id, ticker)
-            if not asset_balance or asset_balance.amount < body.qty:
-                raise HTTPException(status_code=400, detail="Insufficient asset balance")
-            asset_balance.amount -= body.qty
+    try:
+        if isinstance(body, LimitOrderBody):
+            if body.direction == "BUY":
+                await balance_repo.freeze(db, user.id, "RUB", body.qty * body.price)
+            else:
+                await balance_repo.freeze(db, user.id, ticker, body.qty)
 
-        order = Order(
-            id=order_id,
-            user_id=user.id,
-            status=OrderStatus.NEW,
-            direction=body.direction,
-            ticker=ticker,
-            qty=body.qty,
-            price=body.price,
-            filled=0
-        )
+            order = Order(
+                id=order_id,
+                user_id=user.id,
+                status=OrderStatus.NEW,
+                direction=body.direction,
+                ticker=ticker,
+                qty=body.qty,
+                price=body.price,
+                filled=0
+            )
+        else: 
+            order = Order(
+                id=order_id,
+                user_id=user.id,
+                status=OrderStatus.NEW,
+                direction=body.direction,
+                ticker=ticker,
+                qty=body.qty,
+                price=None,
+                filled=0
+            )
 
         db.add(order)
         await db.commit()
-
         match_order_task.delay(str(order.id))
-
         return {"success": True, "order_id": order.id}
-
-    else:
-        order = Order(
-            id=order_id,
-            user_id=user.id,
-            status=OrderStatus.NEW,
-            direction=body.direction,
-            ticker=ticker,
-            qty=body.qty,
-            price=None,
-            filled=0
-        )
-
-        await matcher.match_order(db, order)
-
-        if order.filled == 0:
-            raise HTTPException(status_code=400, detail="Market order could not be executed")
-
-        db.add(order)
-        await db.commit()
-
-        return {"success": True, "order_id": order.id}
+    except InsufficientBalanceException as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -14,6 +14,18 @@ class OrderStatus(str, Enum):
     PARTIALLY_EXECUTED = "PARTIALLY_EXECUTED"
     CANCELLED = "CANCELLED"
 
+class OrderBookLevel(BaseModel):
+    price: float
+    qty: int
+
+class L2OrderBook(BaseModel):
+    bid_levels: List[OrderBookLevel]
+    ask_levels: List[OrderBookLevel]
+
+class CreateOrderResponse(BaseModel):
+    success: bool = True
+    order_id: UUID
+
 class LimitOrderBody(BaseModel):
     direction: Direction
     ticker: str
@@ -29,36 +41,16 @@ class Order(BaseModel):
     id: UUID4
     status: OrderStatus
     user_id: UUID4
-    timestamp: datetime
+    created_at: datetime = Field(..., alias="timestamp")
     filled: int = 0
 
     class Config:
         from_attributes = True
-
-class OrderBookLevel(BaseModel):
-    price: float
-    qty: int
-
-class L2OrderBook(BaseModel):
-    bid_levels: List[OrderBookLevel]
-    ask_levels: List[OrderBookLevel]
-
-
-class CreateOrderResponse(BaseModel):
-    success: bool = True
-    order_id: UUID
         
-class OrderBase(BaseModel):
-    id: str
-    status: OrderStatus
-    user_id: str
-    timestamp: datetime
-    filled: int = 0
-
-class LimitOrder(OrderBase):
+class LimitOrder(Order):
     body: LimitOrderBody
 
-class MarketOrder(OrderBase):
+class MarketOrder(Order):
     body: MarketOrderBody
 
 OrderResponse = Union[LimitOrder, MarketOrder]

@@ -9,6 +9,7 @@ class Balance(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), primary_key=True)
     ticker = Column(String(10), primary_key=True)
     amount = Column(Integer, default=0)
+    frozen = Column(Integer, default=0)
 
     user = relationship("User", back_populates="balances")
 
