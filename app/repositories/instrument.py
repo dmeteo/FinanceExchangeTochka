@@ -21,7 +21,6 @@ class InstrumentRepository(BaseRepository[Instrument, InstrumentCreate, Instrume
             raise HTTPException(status_code=404, detail="Instrument not found")
 
         await db.delete(instrument)
-        await db.commit()
 
     async def get_all(self, db: AsyncSession) -> list[Instrument]:
         result = await db.execute(select(Instrument))

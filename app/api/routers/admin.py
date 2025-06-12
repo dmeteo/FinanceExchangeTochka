@@ -5,7 +5,7 @@ from core.schemas.balance import BalanceOperation
 from core.database import get_db
 from core.dependencies import require_admin
 from core.schemas.user import User
-from core.schemas.instrument import Instrument, InstrumentCreate, InstrumentResponse
+from core.schemas.instrument import InstrumentCreate
 from repositories import (
     user_repo,
     instrument_repo,
@@ -42,7 +42,6 @@ async def add_instrument(
         raise HTTPException(status_code=400, detail="Instrument already exists")
 
     await instrument_repo.create(db=db, obj_in=instrument_in)
-    await db.commit()
     return {"success": True}
 
 @router.delete("/instrument/{ticker}", response_model=Ok)

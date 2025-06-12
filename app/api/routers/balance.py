@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from core.dependencies import get_current_user
 from repositories import balance_repo
-from typing import Dict
 
 router = APIRouter(prefix="/api/v1/balance", tags=["balance"])
 

@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.core.exceptions import InsufficientBalanceException
 from core.models.order import Order, OrderStatus
 from core.models.transaction import Transaction
 from repositories.order import OrderRepository

@@ -10,15 +10,15 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ):
     if not authorization or not authorization.startswith("TOKEN "):
-        raise HTTPException(status_code=401, detail="Use 'TOKEN <key>' format")
+        raise HTTPException(status_code=401, detail="Invalid TOKEN")
 
     token = authorization.split(" ", 1)[1].strip()
     if not token:
-        raise HTTPException(status_code=401, detail="Empty API key")
+        raise HTTPException(status_code=401, detail="Empty TOKEN")
 
     user = await user_repo.get_by_api_key(db, token)
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+        raise HTTPException(status_code=401, detail="Invalid TOKEN")
 
     return user
 

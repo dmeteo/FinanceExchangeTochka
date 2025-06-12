@@ -11,7 +11,6 @@ from core.models.order import Order, OrderStatus
 from repositories.order import OrderRepository
 from repositories.balance import BalanceRepository
 from repositories.instrument import InstrumentRepository
-from services.order_matching import OrderMatchingService
 from tasks.match_order import match_order_task
 from core.dependencies import get_db, get_current_user
 

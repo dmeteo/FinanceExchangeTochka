@@ -1,16 +1,12 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.types import OrderStatus
-from core.models.transaction import Transaction as TransactionModel
 from core.schemas.transaction import Transaction as TransactionSchema
 from core.schemas.user import User, UserCreate
 from core.database import get_db
 from repositories import instrument_repo, user_repo, order_repo, transaction_repo
-from core.schemas.order import  L2OrderBook, Order, OrderBookLevel
+from core.schemas.order import  L2OrderBook, OrderBookLevel
 from core.schemas.instrument import Instrument
-from typing import List
 
 router = APIRouter(prefix="/api/v1/public", tags=["public"])
 
@@ -38,7 +34,7 @@ async def register_user(
 async def get_orderbook(ticker: str, limit: int = 10, db: AsyncSession = Depends(get_db)):
     bids = await order_repo.get_bids(db, ticker, limit)
     asks = await order_repo.get_asks(db, ticker, limit)
-    
+
     return L2OrderBook(
         bid_levels=[OrderBookLevel(price=o.price, qty=o.qty - o.filled) for o in bids],
         ask_levels=[OrderBookLevel(price=o.price, qty=o.qty - o.filled) for o in asks]

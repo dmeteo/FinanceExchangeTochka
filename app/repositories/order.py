@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
 from core.models.order import Order
 from core.schemas.order import LimitOrderBody, OrderStatus
 from .base import BaseRepository
