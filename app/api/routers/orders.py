@@ -1,7 +1,8 @@
 from uuid import UUID, uuid4
-from typing import Annotated, Union
+from typing import Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import InsufficientBalanceException
@@ -93,39 +94,44 @@ async def cancel_order(
 
 @router.post("/", response_model=CreateOrderResponse)
 async def create_order(
-    body: Annotated[Union[LimitOrderBody, MarketOrderBody], Body(discriminator="price")],
+    body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user)
 ):
     print(f"Order body: {body}")
-    ticker = body.ticker.upper()
-    if isinstance(body, LimitOrderBody):
-        if body.qty <= 0 or body.price <= 0:
-            raise HTTPException(status_code=422, detail="qty and price must be > 0")
-    elif isinstance(body, MarketOrderBody):
-        if body.qty <= 0:
-            raise HTTPException(status_code=422, detail="qty must be > 0")
-        
+    try:
+        if "price" in body:
+            parsed = LimitOrderBody(**body)
+            if parsed.qty <= 0 or parsed.price <= 0:
+                raise HTTPException(status_code=422, detail="qty and price must be > 0")
+        else:
+            parsed = MarketOrderBody(**body)
+            if parsed.qty <= 0:
+                raise HTTPException(status_code=422, detail="qty must be > 0")
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+
+    ticker = parsed.ticker.upper()
     instrument = await instrument_repo.get_by_ticker(db, ticker)
     if not instrument:
         raise HTTPException(status_code=404, detail="Instrument not found")
     order_id = uuid4()
 
     try:
-        if isinstance(body, LimitOrderBody):
-            if body.direction == "BUY":
-                await balance_repo.freeze(db, user.id, "RUB", body.qty * body.price)
+        if isinstance(parsed, LimitOrderBody):
+            if parsed.direction == "BUY":
+                await balance_repo.freeze(db, user.id, "RUB", parsed.qty * parsed.price)
             else:
-                await balance_repo.freeze(db, user.id, ticker, body.qty)
+                await balance_repo.freeze(db, user.id, ticker, parsed.qty)
 
             order = Order(
                 id=order_id,
                 user_id=user.id,
                 status=OrderStatus.NEW,
-                direction=body.direction,
+                direction=parsed.direction,
                 ticker=ticker,
-                qty=body.qty,
-                price=body.price,
+                qty=parsed.qty,
+                price=parsed.price,
                 filled=0
             )
         else: 
@@ -133,9 +139,9 @@ async def create_order(
                 id=order_id,
                 user_id=user.id,
                 status=OrderStatus.NEW,
-                direction=body.direction,
+                direction=parsed.direction,
                 ticker=ticker,
-                qty=body.qty,
+                qty=parsed.qty,
                 price=None,
                 filled=0
             )
