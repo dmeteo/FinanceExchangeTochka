@@ -19,11 +19,25 @@ class Order(Base, TimestampMixin):
     status = Column(SqlEnum(OrderStatus, name="order_statuses", native_enum=False), default=OrderStatus.NEW)
     filled = Column(Integer, default=0)
 
-    user = relationship("User", back_populates="orders", passive_deletes=True)
-    buy_transactions = relationship("Transaction", foreign_keys="[Transaction.buy_order_id]", back_populates="buy_order", cascade="all, delete-orphan",
-        passive_deletes=True)
-    sell_transactions = relationship("Transaction", foreign_keys="[Transaction.sell_order_id]", back_populates="sell_order", cascade="all, delete-orphan",
-        passive_deletes=True)
+    user = relationship(
+        "User",
+        back_populates="orders",
+        passive_deletes=True,
+    )
+    buy_transactions = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.buy_order_id]",
+        back_populates="buy_order",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    sell_transactions = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.sell_order_id]",
+        back_populates="sell_order",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self):
         return f"<Order(id={self.id}, ticker={self.ticker}, qty={self.qty}, price={self.price})>"

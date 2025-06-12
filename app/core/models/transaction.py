@@ -14,10 +14,18 @@ class Transaction(Base, TimestampMixin):
     amount = Column(Integer, nullable=False)
     price = Column(Integer, nullable=False)
 
-    buy_order = relationship("Order", foreign_keys=[buy_order_id], back_populates="buy_transactions", cascade="all, delete-orphan",
-        passive_deletes=True)
-    sell_order = relationship("Order", foreign_keys=[sell_order_id], back_populates="sell_transactions", cascade="all, delete-orphan",
-        passive_deletes=True)
+    buy_order = relationship(
+        "Order",
+        foreign_keys=[buy_order_id],
+        back_populates="buy_transactions",
+        passive_deletes=True
+    )
+    sell_order = relationship(
+        "Order",
+        foreign_keys=[sell_order_id],
+        back_populates="sell_transactions",
+        passive_deletes=True
+    )
 
     def __repr__(self):
         return f"<Transaction(ticker={self.ticker}, amount={self.amount}, price={self.price})>"

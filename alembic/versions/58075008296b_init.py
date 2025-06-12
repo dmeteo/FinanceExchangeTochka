@@ -1,7 +1,8 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = '3ead17749da6'
+
+revision = '58075008296b'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -29,21 +30,22 @@ def upgrade():
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('ticker', sa.String(length=10), nullable=False),
     sa.Column('amount', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.Column('frozen', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id', 'ticker')
     )
     op.create_table('orders',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('ticker', sa.String(length=10), nullable=False),
-    sa.Column('direction', sa.Enum('BUY', 'SELL', name='order_directions'), nullable=False),
+    sa.Column('direction', sa.Enum('BUY', 'SELL', name='order_directions', native_enum=False), nullable=False),
     sa.Column('qty', sa.Integer(), nullable=False),
     sa.Column('price', sa.Integer(), nullable=True),
-    sa.Column('status', sa.Enum('NEW', 'EXECUTED', 'PARTIALLY_EXECUTED', 'CANCELLED', name='order_statuses'), nullable=True),
+    sa.Column('status', sa.Enum('NEW', 'EXECUTED', 'PARTIALLY_EXECUTED', 'CANCELLED', name='order_statuses', native_enum=False), nullable=True),
     sa.Column('filled', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('transactions',
@@ -55,8 +57,8 @@ def upgrade():
     sa.Column('price', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['buy_order_id'], ['orders.id'], ),
-    sa.ForeignKeyConstraint(['sell_order_id'], ['orders.id'], ),
+    sa.ForeignKeyConstraint(['buy_order_id'], ['orders.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['sell_order_id'], ['orders.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     # ### end Alembic commands ###

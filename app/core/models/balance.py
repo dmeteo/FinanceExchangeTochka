@@ -11,7 +11,10 @@ class Balance(Base):
     amount = Column(Integer, default=0)
     frozen = Column(Integer, default=0)
 
-    user = relationship("User", back_populates="balances")
+    user = relationship(
+        "User",
+        back_populates="balances",
+    )
 
     def __repr__(self):
         return f"<Balance(user_id={self.user_id}, ticker={self.ticker}, amount={self.amount})>"
