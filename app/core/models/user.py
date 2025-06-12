@@ -12,8 +12,9 @@ class User(Base, TimestampMixin):
     role = Column(Enum('USER', 'ADMIN', name='user_roles'), default='USER')
     api_key = Column(String(36), unique=True, nullable=False)
 
-    balances = relationship("Balance", back_populates="user")
-    orders = relationship("Order", back_populates="user")
+    balances = relationship("Balance", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+    
 
     def __repr__(self):
         return f"<User(id={self.id}, name={self.name}, role={self.role})>"

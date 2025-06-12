@@ -6,7 +6,7 @@ from .base import Base
 class Balance(Base):
     __tablename__ = "balances"
     
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete='CASCADE'), primary_key=True)
     ticker = Column(String(10), primary_key=True)
     amount = Column(Integer, default=0)
     frozen = Column(Integer, default=0)
