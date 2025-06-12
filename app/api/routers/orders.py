@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
-from typing import Union
+from typing import Annotated, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import InsufficientBalanceException
@@ -93,10 +93,11 @@ async def cancel_order(
 
 @router.post("/", response_model=CreateOrderResponse)
 async def create_order(
-    body: Union[LimitOrderBody, MarketOrderBody],
+    body: Annotated[Union[LimitOrderBody, MarketOrderBody], Body(discriminator="price")],
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user)
 ):
+    print(f"Order body: {body}")
     ticker = body.ticker.upper()
     if isinstance(body, LimitOrderBody):
         if body.qty <= 0 or body.price <= 0:
