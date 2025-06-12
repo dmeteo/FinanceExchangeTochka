@@ -98,6 +98,13 @@ async def create_order(
     user = Depends(get_current_user)
 ):
     ticker = body.ticker.upper()
+    if isinstance(body, LimitOrderBody):
+        if body.qty <= 0 or body.price <= 0:
+            raise HTTPException(status_code=422, detail="qty and price must be > 0")
+    elif isinstance(body, MarketOrderBody):
+        if body.qty <= 0:
+            raise HTTPException(status_code=422, detail="qty must be > 0")
+        
     instrument = await instrument_repo.get_by_ticker(db, ticker)
     if not instrument:
         raise HTTPException(status_code=404, detail="Instrument not found")
