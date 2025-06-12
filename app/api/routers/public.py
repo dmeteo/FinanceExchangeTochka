@@ -36,8 +36,14 @@ async def get_orderbook(ticker: str, limit: int = 10, db: AsyncSession = Depends
     asks = await order_repo.get_asks(db, ticker, limit)
 
     return L2OrderBook(
-        bid_levels=[OrderBookLevel(price=o.price, qty=o.qty - o.filled) for o in bids],
-        ask_levels=[OrderBookLevel(price=o.price, qty=o.qty - o.filled) for o in asks]
+        bid_levels=[
+        OrderBookLevel(price=o.price, qty=o.qty - o.filled)
+        for o in bids if o.price is not None
+    ],
+        ask_levels=[
+        OrderBookLevel(price=o.price, qty=o.qty - o.filled)
+        for o in asks if o.price is not None
+    ]
     )
 
 @router.get("/transactions/{ticker}", response_model=list[TransactionSchema], tags=["public"])
