@@ -8,6 +8,7 @@ from core.dependencies import require_admin
 from core.schemas.user import User
 from core.schemas.instrument import InstrumentCreate
 from repositories import (
+    order_repo,
     user_repo,
     instrument_repo,
     balance_repo
@@ -59,9 +60,26 @@ async def delete_instrument(
     if not instrument:
         raise HTTPException(status_code=404, detail="Instrument not found")
 
+    active_bids = await order_repo.get_bids(db, ticker, limit=1)
+    active_asks = await order_repo.get_asks(db, ticker, limit=1)
+
+    if active_bids or active_asks:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete instrument: active orders exist"
+        )
+
+    balances = await balance_repo.get_balances_by_ticker(db, ticker)
+    if balances:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete instrument: users have active balances"
+        )
+
     await instrument_repo.delete_by_ticker(db, ticker)
     await db.commit()
     return {"success": True}
+
 
 
 @router.post("/balance/deposit", response_model=Ok)

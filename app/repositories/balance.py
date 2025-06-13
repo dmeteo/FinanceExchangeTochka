@@ -17,6 +17,12 @@ class BalanceRepository:
         )
         return result.scalars().all()
 
+    async def get_balances_by_ticker(self, db: AsyncSession, ticker: str) -> list[Balance]:
+        result = await db.execute(
+            select(Balance).where(Balance.ticker == ticker)
+        )
+        return result.scalars().all()
+
     async def get_balance(
         self, 
         db: AsyncSession, 
