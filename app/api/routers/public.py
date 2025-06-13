@@ -1,6 +1,10 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.models.balance import Balance
+from app.core.models.order import Order
+from app.core.models.transaction import Transaction
 from core.schemas.transaction import Transaction as TransactionSchema
 from core.schemas.user import User, UserCreate
 from core.database import get_db
@@ -23,7 +27,28 @@ async def register_user(
             api_key=api_key,
             role="USER"
         )
+
+
+        await db.execute(
+            delete(Order).where(Order.user_id == user.id)
+        )
+        await db.execute(
+            delete(Balance).where(Balance.user_id == user.id)
+        )
+        await db.execute(
+            delete(Transaction).where(
+                (Transaction.buy_order_id.in_(
+                    select(Order.id).where(Order.user_id == user.id)
+                )) |
+                (Transaction.sell_order_id.in_(
+                    select(Order.id).where(Order.user_id == user.id)
+                ))
+            )
+        )
+        await db.commit()
+
         return user
+
     except Exception as e:
         raise HTTPException(
             status_code=400,
