@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class InstrumentBase(BaseModel):
-    name: str = Field(..., min_length=1, example="Meme Coin")
+    name: constr(max_length=50) = Field(..., min_length=1, example="Meme Coin")
     ticker: str = Field(..., pattern=r'^[A-Z]{2,10}$', example="MEMCOIN")
 
 class InstrumentCreate(InstrumentBase):

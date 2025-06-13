@@ -1,4 +1,4 @@
-from pydantic import BaseModel, UUID4
+from pydantic import BaseModel, UUID4, constr
 from enum import Enum
 
 class UserRole(str, Enum):
@@ -6,11 +6,11 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"
 
 class UserBase(BaseModel):
-    name: str
+    name: constr(max_length=50)
     role: UserRole = UserRole.USER
 
 class UserCreate(BaseModel):
-    name: str
+    name: constr(max_length=50)
 
     class Config:
         extra = "forbid"
