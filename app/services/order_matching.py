@@ -33,7 +33,9 @@ class OrderMatchingService:
         result = await db.execute(base_query)
         candidates = result.scalars().all()
         remaining_qty = order.qty
-
+        
+        print(f"[DEBUG] order: id={order.id} dir={order.direction} status={order.status} filled={order.filled} qty={order.qty}")
+        print(f"[DEBUG] найдено кандидатов: {len(candidates)}")
         for match in candidates:
             print(f"[MATCHING] Checking: order={order.id} ({order.direction}) with candidate={match.id} ({match.direction}), "
                     f"order.qty={order.qty}, match.qty={match.qty}, "
