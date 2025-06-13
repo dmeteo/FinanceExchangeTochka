@@ -46,7 +46,7 @@ class OrderMatchingService:
                 if trade_qty <= 0:
                     continue
 
-                trade_price = match.price
+                trade_price = trade_price = match.price if match.price is not None else order.price
 
                 buy_order = order if is_buy else match
                 sell_order = match if is_buy else order

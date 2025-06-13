@@ -41,7 +41,7 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
                 Order.direction == "BUY",
                 Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED])
             )
-            .order_by(Order.price.desc())
+            .order_by(Order.price.desc(), Order.created_at.asc())  
             .limit(limit)
         )
         return result.scalars().all()
@@ -54,7 +54,7 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
                 Order.direction == "SELL",
                 Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED])
             )
-            .order_by(Order.price.asc())
+            .order_by(Order.price.asc(), Order.created_at.asc())  
             .limit(limit)
         )
         return result.scalars().all()
