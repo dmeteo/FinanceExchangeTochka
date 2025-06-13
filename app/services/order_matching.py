@@ -38,7 +38,9 @@ class OrderMatchingService:
         candidates = result.scalars().all()
 
         try:
+            logging.info(f"Начинаю match_order для order {order.id}: qty={order.qty}, filled={order.filled}, price={order.price}, direction={order.direction}")
             for match in candidates:
+                logging.info(f"Candidate: id={match.id}, status={match.status}, qty={match.qty}, filled={match.filled}")
                 available_qty = match.qty - match.filled
                 trade_qty = min(remaining_qty, available_qty)
                 if trade_qty <= 0:
@@ -51,6 +53,7 @@ class OrderMatchingService:
 
                 await self.balance_repo.spend_frozen(db, buy_order.user_id, "RUB", trade_qty * trade_price)
                 await self.balance_repo.deposit(db, buy_order.user_id, order.ticker, trade_qty)
+                logging.info(f"Исполняем сделку: buyer={buy_order.user_id}, seller={sell_order.user_id}, qty={trade_qty}, price={trade_price}")
 
                 await self.balance_repo.spend_frozen(db, sell_order.user_id, order.ticker, trade_qty)
                 await self.balance_repo.deposit(db, sell_order.user_id, "RUB", trade_qty * trade_price)
@@ -64,6 +67,8 @@ class OrderMatchingService:
                 remaining_qty -= trade_qty
                 if remaining_qty <= 0:
                     break
+            
+            logging.info(f"Итог после match_order для order {order.id}: filled={order.filled}, status={order.status}")
 
             if order.price is None and order.filled == 0:
                 order.status = OrderStatus.CANCELLED

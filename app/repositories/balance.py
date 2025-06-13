@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +31,7 @@ class BalanceRepository:
         return result.scalars().first()
 
     async def deposit(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        logging.info(f"Deposit: user={user_id}, ticker={ticker}, amount={amount}")
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be positive")
         balance = await self.get_balance(db, user_id, ticker, for_update=True)
@@ -73,6 +75,7 @@ class BalanceRepository:
         db.add(to_balance)
 
     async def freeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        logging.info(f"Freeze: user={user_id}, ticker={ticker}, amount={amount}")
         if amount <= 0:
             raise InsufficientBalanceException("Freeze amount must be positive")
         balance = await self.get_balance(db, user_id, ticker, for_update=True)
@@ -83,6 +86,7 @@ class BalanceRepository:
         db.add(balance)
 
     async def unfreeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        logging.info(f"Unfreeze: user={user_id}, ticker={ticker}, amount={amount}")
         if amount <= 0:
             raise InsufficientBalanceException("Unfreeze amount must be positive")
         balance = await self.get_balance(db, user_id, ticker, for_update=True)
@@ -93,6 +97,7 @@ class BalanceRepository:
         db.add(balance)
 
     async def spend_frozen(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        logging.info(f"Spend frozen: user={user_id}, ticker={ticker}, amount={amount}")
         if amount <= 0:
             raise InsufficientBalanceException("Spend amount must be positive")
         balance = await self.get_balance(db, user_id, ticker, for_update=True)

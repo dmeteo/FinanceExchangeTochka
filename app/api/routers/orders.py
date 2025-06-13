@@ -86,6 +86,8 @@ async def cancel_order(
 
     if order.price is None:
         raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
+    
+    logging.info(f"Отмена ордера {order.id}: qty={order.qty}, filled={order.filled}, direction={order.direction}")
 
     remaining_qty = order.qty - order.filled
     if remaining_qty > 0:
@@ -98,9 +100,9 @@ async def cancel_order(
         except InsufficientBalanceException as e:
             logging.warning(f"Unfreeze failed during cancel_order: {e}")
 
+    logging.info(f"Размораживаю средства: {remaining_qty * order.price if order.direction == 'BUY' else remaining_qty}")
     await order_repo.cancel(db, order)
     return {"success": True}
-
 
 @router.post("", response_model=CreateOrderResponse)
 async def create_order(
