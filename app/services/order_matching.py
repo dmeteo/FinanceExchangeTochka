@@ -1,6 +1,7 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from app.repositories import balance_repo, order_repo
 from core.exceptions import InsufficientBalanceException
 from core.models.order import Order, OrderStatus
 from core.models.transaction import Transaction
@@ -14,7 +15,7 @@ class OrderMatchingService:
 
     async def match_order(self, db: AsyncSession, order: Order):
         if order.status == OrderStatus.EXECUTED:
-            return 
+            return
 
         is_buy = order.direction == "BUY"
         remaining_qty = order.qty - order.filled
@@ -26,7 +27,7 @@ class OrderMatchingService:
         )
 
         if order.price is not None:
-            price_condition = Order.price <= order.price if is_buy else Order.price >= order.price
+            price_condition = (Order.price <= order.price) if is_buy else (Order.price >= order.price)
             base_query = base_query.where(price_condition)
 
         base_query = base_query.with_for_update().order_by(
@@ -40,36 +41,33 @@ class OrderMatchingService:
 
         try:
             logging.info(f"Начинаю match_order для order {order.id}: qty={order.qty}, filled={order.filled}, price={order.price}, direction={order.direction}")
+
             for match in candidates:
-                logging.info(f"Candidate: id={match.id}, status={match.status}, qty={match.qty}, filled={match.filled}")
+                if remaining_qty <= 0:
+                    break
                 available_qty = match.qty - match.filled
                 trade_qty = min(remaining_qty, available_qty)
                 if trade_qty <= 0:
                     continue
 
-                trade_price = trade_price = match.price if match.price is not None else order.price
+                trade_price = match.price
 
                 buy_order = order if is_buy else match
                 sell_order = match if is_buy else order
 
                 await self.balance_repo.spend_frozen(db, buy_order.user_id, "RUB", trade_qty * trade_price)
                 await self.balance_repo.deposit(db, buy_order.user_id, order.ticker, trade_qty)
-                logging.info(f"Исполняем сделку: buyer={buy_order.user_id}, seller={sell_order.user_id}, qty={trade_qty}, price={trade_price}")
 
                 await self.balance_repo.spend_frozen(db, sell_order.user_id, order.ticker, trade_qty)
                 await self.balance_repo.deposit(db, sell_order.user_id, "RUB", trade_qty * trade_price)
 
-                order.filled = min(order.qty, order.filled + trade_qty)
-                match.filled = min(match.qty, match.filled + trade_qty)
+                order.filled += trade_qty
+                match.filled += trade_qty
 
                 match.status = update_status(match)
                 db.add(match)
 
                 remaining_qty -= trade_qty
-                if remaining_qty <= 0:
-                    break
-            
-            logging.info(f"Итог после match_order для order {order.id}: filled={order.filled}, status={order.status}")
 
             if order.price is None and order.filled == 0:
                 order.status = OrderStatus.CANCELLED
@@ -93,14 +91,12 @@ class OrderMatchingService:
             logging.error(f"Order matching failed for order {order.id}: {e}")
             raise
 
-
-
-
 def update_status(order):
-    print(f"order.id={order.id} qty={order.qty} filled={order.filled} -> status={order.status}")
     if order.filled == 0:
         return OrderStatus.NEW
     elif order.filled < order.qty:
         return OrderStatus.PARTIALLY_EXECUTED
     else:
         return OrderStatus.EXECUTED
+
+order_matching_service = OrderMatchingService(order_repo, balance_repo)

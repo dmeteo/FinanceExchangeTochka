@@ -1,6 +1,8 @@
+import logging
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from app.core.exceptions import InsufficientBalanceException
 from core.models.order import Order
 from core.schemas.order import LimitOrderBody, OrderStatus
 from .base import BaseRepository
@@ -28,10 +30,29 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
         return await db.get(Order, order_id)
 
     async def cancel(self, db: AsyncSession, order: Order):
+        if order.status in [OrderStatus.EXECUTED, OrderStatus.CANCELLED]:
+            return order
+        remaining_qty = order.qty - order.filled
+        if remaining_qty > 0:
+            if order.direction == "BUY" and order.price:
+                try:
+                    await self.balance_repo.unfreeze(
+                        db, order.user_id, "RUB", remaining_qty * order.price
+                    )
+                except InsufficientBalanceException:
+                    logging.warning(f"Нет замороженного RUB для возврата при отмене BUY ордера {order.id}")
+            elif order.direction == "SELL":
+                try:
+                    await self.balance_repo.unfreeze(
+                        db, order.user_id, order.ticker, remaining_qty
+                    )
+                except InsufficientBalanceException:
+                    logging.warning(f"Нет замороженного {order.ticker} для возврата при отмене SELL ордера {order.id}")
         order.status = OrderStatus.CANCELLED
         await db.commit()
         await db.refresh(order)
         return order
+
     
     async def get_bids(self, db: AsyncSession, ticker: str, limit: int):
         result = await db.execute(
@@ -54,7 +75,7 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
                 Order.direction == "SELL",
                 Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED])
             )
-            .order_by(Order.price.asc(), Order.created_at.asc())  
+            .order_by(Order.price.asc(), Order.created_at.asc())  # Добавлено!
             .limit(limit)
         )
         return result.scalars().all()
