@@ -8,7 +8,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(50), nullable=False)
+    name = Column(String(128), nullable=False)
     role = Column(Enum('USER', 'ADMIN', name='user_roles'), default='USER')
     api_key = Column(String(36), unique=True, nullable=False)
 

@@ -6,11 +6,11 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"
 
 class UserBase(BaseModel):
-    name: constr(max_length=50)
+    name: str
     role: UserRole = UserRole.USER
 
 class UserCreate(BaseModel):
-    name: constr(max_length=50)
+    name: str
 
     class Config:
         extra = "forbid"
