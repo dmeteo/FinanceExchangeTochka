@@ -61,6 +61,9 @@ def upgrade():
     sa.ForeignKeyConstraint(['sell_order_id'], ['orders.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.execute(
+        "INSERT INTO instruments (ticker, name) VALUES ('RUB', 'RUB') ON CONFLICT DO NOTHING;"
+    )
     # ### end Alembic commands ###
 
 def downgrade():
@@ -70,4 +73,5 @@ def downgrade():
     op.drop_table('balances')
     op.drop_table('users')
     op.drop_table('instruments')
+    op.execute("DELETE FROM instruments WHERE ticker='RUB';")
     # ### end Alembic commands ###
