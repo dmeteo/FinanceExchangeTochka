@@ -52,7 +52,7 @@ def _build_order_response(order):
             body=LimitOrderBody(
                 direction=order.direction,
                 ticker=order.ticker,
-                qty=order.qty,
+                qty=max(order.qty - order.filled, 0),
                 price=order.price
             )
         )
@@ -66,7 +66,7 @@ def _build_order_response(order):
             body=MarketOrderBody(
                 direction=order.direction,
                 ticker=order.ticker,
-                qty=order.qty
+                qty=max(order.qty - order.filled, 0)
             )
         )
 
@@ -81,6 +81,8 @@ async def cancel_order(
         raise HTTPException(status_code=404, detail="Order not found")
     if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
         raise HTTPException(status_code=400, detail="Only NEW or PARTIALLY_EXECUTED orders can be cancelled")
+    if order.price is None:
+        raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
 
     remaining_qty = order.qty - order.filled
     if remaining_qty > 0:
