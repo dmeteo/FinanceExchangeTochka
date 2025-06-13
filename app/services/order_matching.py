@@ -35,6 +35,9 @@ class OrderMatchingService:
         remaining_qty = order.qty
 
         for match in candidates:
+            print(f"[MATCHING] Checking: order={order.id} ({order.direction}) with candidate={match.id} ({match.direction}), "
+                    f"order.qty={order.qty}, match.qty={match.qty}, "
+                    f"order.filled={order.filled}, match.filled={match.filled}")
             available_qty = match.qty - match.filled
             trade_qty = min(available_qty, remaining_qty)
             trade_price = match.price if match.price is not None else order.price
