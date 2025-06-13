@@ -77,6 +77,7 @@ class BalanceRepository:
         balance.amount -= amount
         balance.frozen += amount
         db.add(balance)
+        await db.flush()
 
     async def unfreeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
         balance = await self.get_balance(db, user_id, ticker)
@@ -85,6 +86,7 @@ class BalanceRepository:
         balance.amount += amount
         balance.frozen -= amount
         db.add(balance)
+        await db.flush()
 
     async def spend_frozen(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
         balance = await self.get_balance(db, user_id, ticker)
@@ -92,3 +94,4 @@ class BalanceRepository:
             raise InsufficientBalanceException("Недостаточно замороженного баланса для списания")
         balance.frozen -= amount
         db.add(balance)
+        await db.flush()

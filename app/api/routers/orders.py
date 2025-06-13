@@ -84,10 +84,20 @@ async def cancel_order(
 
     remaining_qty = order.qty - order.filled
     if remaining_qty > 0:
-        if order.direction == "BUY":
-            await balance_repo.unfreeze(db, order.user_id, "RUB", remaining_qty * (order.price or 1))
-        else:
-            await balance_repo.unfreeze(db, order.user_id, order.ticker, remaining_qty)
+        try:
+            if order.direction == "BUY":
+                if order.price is None:
+                    raise HTTPException(status_code=400, detail="Cannot unfreeze for market order")
+                await balance_repo.unfreeze(
+                    db, order.user_id, "RUB", remaining_qty * order.price
+                )
+            else:
+                await balance_repo.unfreeze(
+                    db, order.user_id, order.ticker, remaining_qty
+                )
+        except InsufficientBalanceException as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     await order_repo.cancel(db, order)
     return {"success": True}
 
