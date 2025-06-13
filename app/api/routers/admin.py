@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.models.order import Order
+from app.core.models.transaction import Transaction
 from app.core.schemas.common import Ok
 from core.schemas.balance import BalanceOperation
 from core.database import get_db
@@ -75,8 +78,10 @@ async def delete_instrument(
             status_code=400,
             detail="Cannot delete instrument: users have active balances"
         )
+    
 
-    await instrument_repo.delete_by_ticker(db, ticker)
+    await db.execute(delete(Order).where(Order.ticker == ticker))
+    await db.execute(delete(Transaction).where(Transaction.ticker == ticker))
     await db.commit()
     return {"success": True}
 

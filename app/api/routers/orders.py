@@ -77,40 +77,39 @@ async def cancel_order(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user)
 ):
-    async with db.begin():
-        order = await order_repo.get(db, order_id)
-        if not order or order.user_id != user.id:
-            raise HTTPException(status_code=404, detail="Order not found")
+    order = await order_repo.get(db, order_id)
+    if not order or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Order not found")
 
-        if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
-            raise HTTPException(status_code=400, detail="Only NEW or PARTIALLY_EXECUTED orders can be cancelled")
+    if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
+        raise HTTPException(status_code=400, detail="Only NEW or PARTIALLY_EXECUTED orders can be cancelled")
 
-        if order.price is None:
-            raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
-        
-        logging.info(f"Отмена ордера {order.id}: qty={order.qty}, filled={order.filled}, direction={order.direction}")
+    if order.price is None:
+        raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
+    
+    logging.info(f"Отмена ордера {order.id}: qty={order.qty}, filled={order.filled}, direction={order.direction}")
 
-        remaining_qty = order.qty - order.filled
-        if remaining_qty > 0:
-            try:
-                if order.direction == "BUY":
-                    rub_to_return = remaining_qty * order.price
-                    balance = await balance_repo.get_balance(db, order.user_id, "RUB", for_update=True)
-                    if balance and balance.frozen >= rub_to_return:
-                        await balance_repo.unfreeze(db, order.user_id, "RUB", rub_to_return)
-                    else:
-                        logging.warning(f"Нет замороженных RUB для возврата при отмене BUY ордера {order.id}")
+    remaining_qty = order.qty - order.filled
+    if remaining_qty > 0:
+        try:
+            if order.direction == "BUY":
+                rub_to_return = remaining_qty * order.price
+                balance = await balance_repo.get_balance(db, order.user_id, "RUB", for_update=True)
+                if balance and balance.frozen >= rub_to_return:
+                    await balance_repo.unfreeze(db, order.user_id, "RUB", rub_to_return)
                 else:
-                    balance = await balance_repo.get_balance(db, order.user_id, order.ticker, for_update=True)
-                    if balance and balance.frozen >= remaining_qty:
-                        await balance_repo.unfreeze(db, order.user_id, order.ticker, remaining_qty)
-                    else:
-                        logging.warning(f"Нет замороженных {order.ticker} для возврата при отмене SELL ордера {order.id}")
-            except InsufficientBalanceException as e:
-                logging.warning(f"Unfreeze failed during cancel_order: {e}")
+                    logging.warning(f"Нет замороженных RUB для возврата при отмене BUY ордера {order.id}")
+            else:
+                balance = await balance_repo.get_balance(db, order.user_id, order.ticker, for_update=True)
+                if balance and balance.frozen >= remaining_qty:
+                    await balance_repo.unfreeze(db, order.user_id, order.ticker, remaining_qty)
+                else:
+                    logging.warning(f"Нет замороженных {order.ticker} для возврата при отмене SELL ордера {order.id}")
+        except InsufficientBalanceException as e:
+            logging.warning(f"Unfreeze failed during cancel_order: {e}")
 
-        logging.info(f"Размораживаю средства: {remaining_qty * order.price if order.direction == 'BUY' else remaining_qty}")
-        await order_repo.cancel(db, order)
+    logging.info(f"Размораживаю средства: {remaining_qty * order.price if order.direction == 'BUY' else remaining_qty}")
+    await order_repo.cancel(db, order)
     return {"success": True}
 
 @router.post("", response_model=CreateOrderResponse)
