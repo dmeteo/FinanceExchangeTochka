@@ -31,7 +31,8 @@ class OrderMatchingService:
 
         base_query = base_query.with_for_update().order_by(
             Order.price.asc() if is_buy else Order.price.desc(),
-            Order.created_at.asc()
+            Order.created_at.asc(),
+            Order.id.asc()
         )
 
         result = await db.execute(base_query)

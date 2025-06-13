@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.models.balance import Balance
 from app.core.models.order import Order
 from app.core.models.transaction import Transaction
 from app.core.schemas.common import Ok
@@ -25,19 +26,33 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 async def get_logs(admin: User = Depends(require_admin)):
     return FileResponse("/app/requests.log")
 
-@router.delete("/user/{user_id}", response_model=User)
 async def delete_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin)
 ):
-    user = await user_repo.get(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    await db.delete(user)
-    await db.commit()
-    return user
+    try:
+        await db.execute(delete(Order).where(Order.user_id == user_id))
+
+        await db.execute(delete(Balance).where(Balance.user_id == user_id))
+
+        await db.execute(delete(Transaction).where(
+            (Transaction.buy_order_id.in_(
+                select(Order.id).where(Order.user_id == user_id)
+            )) |
+            (Transaction.sell_order_id.in_(
+                select(Order.id).where(Order.user_id == user_id)
+            ))
+        ))
+
+        await db.execute(delete(User).where(User.id == user_id))
+        await db.commit()
+
+        return {"success": True}
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {e}")
 
 
 @router.post("/instrument", response_model=Ok, status_code=status.HTTP_200_OK)
