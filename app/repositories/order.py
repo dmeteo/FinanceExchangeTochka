@@ -3,10 +3,12 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from core.exceptions import InsufficientBalanceException
-from repositories import balance_repo
+from repositories.balance import BalanceRepository
 from core.models.order import Order
 from core.schemas.order import LimitOrderBody, OrderStatus
 from .base import BaseRepository
+
+balance_repo = BalanceRepository()
 
 class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
     def __init__(self):
