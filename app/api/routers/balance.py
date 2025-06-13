@@ -6,7 +6,7 @@ from repositories import balance_repo
 
 router = APIRouter(prefix="/api/v1/balance", tags=["balance"])
 
-@router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 async def get_balances(
     user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)

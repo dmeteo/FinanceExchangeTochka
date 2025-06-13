@@ -22,7 +22,7 @@ balance_repo = BalanceRepository()
 instrument_repo = InstrumentRepository()
 
 
-@router.get("/", response_model=list[OrderResponse])
+@router.get("", response_model=list[OrderResponse])
 async def get_orders(
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user)
@@ -92,7 +92,7 @@ async def cancel_order(
     return {"success": True}
 
 
-@router.post("/", response_model=CreateOrderResponse)
+@router.post("", response_model=CreateOrderResponse)
 async def create_order(
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
