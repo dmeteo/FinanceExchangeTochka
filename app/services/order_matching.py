@@ -9,47 +9,69 @@ from repositories.order import OrderRepository
 from repositories.balance import BalanceRepository
 
 class OrderMatchingService:
-    def __init__(self, order_repo: OrderRepository, balance_repo: BalanceRepository):
+    def __init__(self, order_repo, balance_repo):
         self.order_repo = order_repo
         self.balance_repo = balance_repo
 
     async def match_order(self, db: AsyncSession, order: Order):
-        if order.status == OrderStatus.EXECUTED:
+        if order.status in [OrderStatus.EXECUTED, OrderStatus.CANCELLED]:
             return
 
         is_buy = order.direction == "BUY"
         remaining_qty = order.qty - order.filled
 
-        base_query = select(Order).where(
-            Order.ticker == order.ticker,
-            Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
-            Order.direction != order.direction,
-        )
+        opposite_direction = "SELL" if is_buy else "BUY"
 
-        if order.price is not None:
-            price_condition = (Order.price <= order.price) if is_buy else (Order.price >= order.price)
-            base_query = base_query.where(price_condition)
+        is_market = order.price is None
 
-        base_query = base_query.with_for_update().order_by(
-            Order.price.asc() if is_buy else Order.price.desc(),
-            Order.created_at.asc(),
-            Order.id.asc()
-        )
+        if is_market:
+            base_query = (
+                select(Order)
+                .where(
+                    Order.ticker == order.ticker,
+                    Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
+                    Order.direction == opposite_direction,
+                    Order.price != None
+                )
+                .order_by(
+                    Order.price.asc() if is_buy else Order.price.desc(),
+                    Order.created_at.asc(),
+                    Order.id.asc()
+                )
+                .with_for_update()
+            )
+        else:
+            price_cmp = Order.price <= order.price if is_buy else Order.price >= order.price
+            base_query = (
+                select(Order)
+                .where(
+                    Order.ticker == order.ticker,
+                    Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]),
+                    Order.direction == opposite_direction,
+                    price_cmp
+                )
+                .order_by(
+                    Order.price.asc() if is_buy else Order.price.desc(),
+                    Order.created_at.asc(),
+                    Order.id.asc()
+                )
+                .with_for_update()
+            )
 
         result = await db.execute(base_query)
         candidates = result.scalars().all()
+        executed = False
 
         try:
-            logging.info(f"Начинаю match_order для order {order.id}: qty={order.qty}, filled={order.filled}, price={order.price}, direction={order.direction}")
-
             for match in candidates:
                 if remaining_qty <= 0:
                     break
+
                 available_qty = match.qty - match.filled
-                trade_qty = min(remaining_qty, available_qty)
-                if trade_qty <= 0:
+                if available_qty <= 0:
                     continue
 
+                trade_qty = min(remaining_qty, available_qty)
                 trade_price = match.price
 
                 buy_order = order if is_buy else match
@@ -63,26 +85,34 @@ class OrderMatchingService:
 
                 order.filled += trade_qty
                 match.filled += trade_qty
+                remaining_qty -= trade_qty
+                executed = True
 
                 match.status = update_status(match)
                 db.add(match)
 
-                remaining_qty -= trade_qty
-
-            if order.price is None and order.filled == 0:
+            if is_market and order.filled == 0:
                 order.status = OrderStatus.CANCELLED
             else:
                 order.status = update_status(order)
 
             db.add(order)
 
-            if is_buy and order.price:
-                leftover_rub = (order.qty - order.filled) * order.price
-                if leftover_rub > 0:
-                    try:
-                        await self.balance_repo.unfreeze(db, order.user_id, "RUB", leftover_rub)
-                    except InsufficientBalanceException as e:
-                        logging.warning(f"Unfreeze failed after partial BUY execution: {e}")
+            if not is_market:
+                if is_buy:
+                    leftover_rub = (order.qty - order.filled) * order.price
+                    if leftover_rub > 0:
+                        try:
+                            await self.balance_repo.unfreeze(db, order.user_id, "RUB", leftover_rub)
+                        except Exception as e:
+                            logging.warning(f"Unfreeze failed: {e}")
+                else:
+                    leftover_qty = (order.qty - order.filled)
+                    if leftover_qty > 0:
+                        try:
+                            await self.balance_repo.unfreeze(db, order.user_id, order.ticker, leftover_qty)
+                        except Exception as e:
+                            logging.warning(f"Unfreeze failed: {e}")
 
             await db.commit()
 

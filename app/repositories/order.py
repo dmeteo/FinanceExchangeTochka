@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.exceptions import InsufficientBalanceException
+from app.repositories import balance_repo
 from core.models.order import Order
 from core.schemas.order import LimitOrderBody, OrderStatus
 from .base import BaseRepository
@@ -36,14 +37,14 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
         if remaining_qty > 0:
             if order.direction == "BUY" and order.price:
                 try:
-                    await self.balance_repo.unfreeze(
+                    await balance_repo.unfreeze(
                         db, order.user_id, "RUB", remaining_qty * order.price
                     )
                 except InsufficientBalanceException:
                     logging.warning(f"Нет замороженного RUB для возврата при отмене BUY ордера {order.id}")
             elif order.direction == "SELL":
                 try:
-                    await self.balance_repo.unfreeze(
+                    await balance_repo.unfreeze(
                         db, order.user_id, order.ticker, remaining_qty
                     )
                 except InsufficientBalanceException:

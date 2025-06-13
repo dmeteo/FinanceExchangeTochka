@@ -77,16 +77,24 @@ async def cancel_order(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user)
-    ):
+):
     order = await order_repo.get(db, order_id)
     if not order or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found")
-
-    if order.status in [OrderStatus.EXECUTED, OrderStatus.CANCELLED]:
-        raise HTTPException(status_code=400, detail="Order already executed or cancelled")
-
+    
     if order.price is None:
         raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
+
+    if order.status != OrderStatus.NEW:
+        raise HTTPException(status_code=400, detail="Only NEW limit orders can be cancelled")
+
+    remaining_qty = order.qty - order.filled
+    if remaining_qty > 0:
+        if order.direction == "BUY":
+            rub_to_return = remaining_qty * order.price
+            await balance_repo.unfreeze(db, order.user_id, "RUB", rub_to_return)
+        else:
+            await balance_repo.unfreeze(db, order.user_id, order.ticker, remaining_qty)
 
     await order_repo.cancel(db, order)
     return {"success": True}
