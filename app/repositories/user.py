@@ -22,6 +22,8 @@ class UserRepository(BaseRepository[User, UserCreate, UserCreate]):
     api_key: str | None = None
     ) -> User:
         FORBIDDEN_NAMES = {"admin", "root", "support"}
+        if not name:
+            raise ValueError("Username cannot be empty")
         if name.lower() in FORBIDDEN_NAMES:
             raise ValueError("This username is not allowed")
 
