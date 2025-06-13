@@ -8,7 +8,11 @@ from api.routers import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Toy Exchange", version="0.1.0")
+from core.logging_middleware import LoggingMiddleware
+
+app = FastAPI(title="API Tochka", version="0.1.0")
+
+app.add_middleware(LoggingMiddleware)
 
 @app.get("/health")
 def health():
