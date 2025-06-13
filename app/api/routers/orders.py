@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID, uuid4
 from typing import Union
 
@@ -85,20 +86,25 @@ async def cancel_order(
         raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
 
     remaining_qty = order.qty - order.filled
-    if remaining_qty > 0:
-        try:
+
+    try:
+        if remaining_qty > 0:
             if order.direction == "BUY":
                 if order.price is None:
                     raise HTTPException(status_code=400, detail="Cannot unfreeze for market order")
+                rub_to_return = remaining_qty * order.price
+                print(f"[CANCEL] Unfreezing {rub_to_return} RUB for BUY order {order.id}")
                 await balance_repo.unfreeze(
-                    db, order.user_id, "RUB", remaining_qty * order.price
+                    db, order.user_id, "RUB", rub_to_return
                 )
             else:
+                print(f"[CANCEL] Unfreezing {remaining_qty} {order.ticker} for SELL order {order.id}")
                 await balance_repo.unfreeze(
                     db, order.user_id, order.ticker, remaining_qty
                 )
-        except InsufficientBalanceException as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    except InsufficientBalanceException as e:
+        logging.warning(f"[CANCEL] Unfreeze failed for order {order.id}: {str(e)}")
+
 
     await order_repo.cancel(db, order)
     return {"success": True}

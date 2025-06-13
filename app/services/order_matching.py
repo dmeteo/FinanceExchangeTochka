@@ -1,5 +1,7 @@
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from core.exceptions import InsufficientBalanceException
 from core.models.order import Order, OrderStatus
 from core.models.transaction import Transaction
 from repositories.order import OrderRepository
@@ -72,15 +74,17 @@ class OrderMatchingService:
         if order.price is None and order.filled == 0:
             order.status = OrderStatus.CANCELLED
         else:
-            # Обычная логика
             order.status = update_status(order)
         
         db.add(order)
 
-        if is_buy and order.price:
-            leftover_rub = (order.qty - order.filled) * order.price
-            if leftover_rub > 0:
-                await self.balance_repo.unfreeze(db, order.user_id, "RUB", leftover_rub)
+        if order.direction == "BUY" and order.price:
+            leftover = (order.qty - order.filled) * order.price
+            if leftover > 0:
+                try:
+                    await self.balance_repo.unfreeze(db, order.user_id, "RUB", leftover)
+                except InsufficientBalanceException:
+                    logging.warning(f"Unfreeze failed after partial BUY execution for order {order.id}")
 
         await db.commit()
 
