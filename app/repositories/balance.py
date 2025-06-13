@@ -24,27 +24,27 @@ class BalanceRepository:
         return result.scalars().first()
     
     async def deposit(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
         balance = await self.get_balance(db, user_id, ticker)
         if balance:
             balance.amount += amount
         else:
             balance = Balance(user_id=user_id, ticker=ticker, amount=amount, frozen=0)
             db.add(balance)
-        db.add(balance)
+        db.add(balance) 
 
-
-    async def withdraw(
-    self, db: AsyncSession, user_id: UUID, ticker: str, amount: int
-    ):
+    async def withdraw(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
         balance = await self.get_balance(db, user_id, ticker)
         if not balance:
             raise HTTPException(status_code=404, detail="Balance entry not found")
-
         if balance.amount < amount:
             raise HTTPException(status_code=400, detail="Insufficient funds")
-
         balance.amount -= amount
-    
+        db.add(balance)
+
     async def transfer(
         self,
         db: AsyncSession,
@@ -53,45 +53,45 @@ class BalanceRepository:
         ticker: str,
         qty: int,
     ):
+        if qty <= 0:
+            raise HTTPException(status_code=400, detail="Transfer qty must be positive")
         from_balance = await self.get_balance(db, from_user_id, ticker)
         to_balance = await self.get_balance(db, to_user_id, ticker)
-
         if not from_balance or from_balance.amount < qty:
-            raise InsufficientBalanceException()
-
+            raise InsufficientBalanceException("Not enough funds for transfer")
         from_balance.amount -= qty
-
-        if not to_balance:
-            to_balance = Balance(user_id=to_user_id, ticker=ticker, amount=0)
-            db.add(to_balance)
-
-        to_balance.amount += qty
-
         db.add(from_balance)
+        if not to_balance:
+            to_balance = Balance(user_id=to_user_id, ticker=ticker, amount=0, frozen=0)
+            db.add(to_balance)
+        to_balance.amount += qty
         db.add(to_balance)
 
     async def freeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        if amount <= 0:
+            raise InsufficientBalanceException("Freeze amount must be positive")
         balance = await self.get_balance(db, user_id, ticker)
         if not balance or balance.amount < amount:
             raise InsufficientBalanceException("Недостаточно средств для резервации")
         balance.amount -= amount
         balance.frozen += amount
         db.add(balance)
-        await db.flush()
 
     async def unfreeze(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        if amount <= 0:
+            raise InsufficientBalanceException("Unfreeze amount must be positive")
         balance = await self.get_balance(db, user_id, ticker)
         if not balance or balance.frozen < amount:
             raise InsufficientBalanceException("Недостаточно замороженного баланса")
         balance.amount += amount
         balance.frozen -= amount
         db.add(balance)
-        await db.flush()
 
     async def spend_frozen(self, db: AsyncSession, user_id: UUID, ticker: str, amount: int):
+        if amount <= 0:
+            raise InsufficientBalanceException("Spend amount must be positive")
         balance = await self.get_balance(db, user_id, ticker)
         if not balance or balance.frozen < amount:
             raise InsufficientBalanceException("Недостаточно замороженного баланса для списания")
         balance.frozen -= amount
         db.add(balance)
-        await db.flush()
