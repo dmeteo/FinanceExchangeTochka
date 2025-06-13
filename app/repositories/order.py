@@ -2,8 +2,8 @@ import logging
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.core.exceptions import InsufficientBalanceException
-from app.repositories import balance_repo
+from core.exceptions import InsufficientBalanceException
+from repositories import balance_repo
 from core.models.order import Order
 from core.schemas.order import LimitOrderBody, OrderStatus
 from .base import BaseRepository
@@ -76,7 +76,7 @@ class OrderRepository(BaseRepository[Order, LimitOrderBody, LimitOrderBody]):
                 Order.direction == "SELL",
                 Order.status.in_([OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED])
             )
-            .order_by(Order.price.asc(), Order.created_at.asc())  # Добавлено!
+            .order_by(Order.price.asc(), Order.created_at.asc())
             .limit(limit)
         )
         return result.scalars().all()

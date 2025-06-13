@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.core.exceptions import InsufficientBalanceException
+from core.exceptions import InsufficientBalanceException
 from core.models.balance import Balance
 
 class BalanceRepository:
