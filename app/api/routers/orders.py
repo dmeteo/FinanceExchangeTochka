@@ -75,36 +75,28 @@ def _build_order_response(order):
 async def cancel_order(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
     order = await order_repo.get(db, order_id)
     if not order or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found")
+
     if order.status not in [OrderStatus.NEW, OrderStatus.PARTIALLY_EXECUTED]:
         raise HTTPException(status_code=400, detail="Only NEW or PARTIALLY_EXECUTED orders can be cancelled")
+
     if order.price is None:
         raise HTTPException(status_code=400, detail="Market orders cannot be cancelled")
 
     remaining_qty = order.qty - order.filled
-
-    try:
-        if remaining_qty > 0:
+    if remaining_qty > 0:
+        try:
             if order.direction == "BUY":
-                if order.price is None:
-                    raise HTTPException(status_code=400, detail="Cannot unfreeze for market order")
                 rub_to_return = remaining_qty * order.price
-                print(f"[CANCEL] Unfreezing {rub_to_return} RUB for BUY order {order.id}")
-                await balance_repo.unfreeze(
-                    db, order.user_id, "RUB", rub_to_return
-                )
+                await balance_repo.unfreeze(db, order.user_id, "RUB", rub_to_return)
             else:
-                print(f"[CANCEL] Unfreezing {remaining_qty} {order.ticker} for SELL order {order.id}")
-                await balance_repo.unfreeze(
-                    db, order.user_id, order.ticker, remaining_qty
-                )
-    except InsufficientBalanceException as e:
-        logging.warning(f"[CANCEL] Unfreeze failed for order {order.id}: {str(e)}")
-
+                await balance_repo.unfreeze(db, order.user_id, order.ticker, remaining_qty)
+        except InsufficientBalanceException as e:
+            logging.warning(f"Unfreeze failed during cancel_order: {e}")
 
     await order_repo.cancel(db, order)
     return {"success": True}
