@@ -11,6 +11,9 @@ class OrderMatchingService:
         self.balance_repo = balance_repo
 
     async def match_order(self, db: AsyncSession, order: Order):
+        if order.status == OrderStatus.EXECUTED:
+            return
+
         is_buy = order.direction == "BUY"
 
         base_query = select(Order).where(
@@ -35,8 +38,7 @@ class OrderMatchingService:
         for match in candidates:
             match_available = match.qty - match.filled
             trade_qty = min(remaining_qty, match_available)
-
-            if trade_qty <= 0:
+            if trade_qty <= 0 or trade_price is None or trade_price <= 0:
                 continue
 
             trade_price = match.price
@@ -50,8 +52,8 @@ class OrderMatchingService:
             await self.balance_repo.spend_frozen(db, sell_order.user_id, order.ticker, trade_qty)
             await self.balance_repo.deposit(db, sell_order.user_id, "RUB", trade_qty * trade_price)
 
-            order.filled += trade_qty
-            match.filled += trade_qty
+            order.filled = min(order.qty, order.filled + trade_qty)
+            match.filled += min(match.qty, match.filled + trade_qty)
 
             match.status = update_status(match)
             db.add(Transaction(
@@ -67,7 +69,12 @@ class OrderMatchingService:
             if remaining_qty <= 0:
                 break
 
-        order.status = update_status(order)
+        if order.price is None and order.filled == 0:
+            order.status = OrderStatus.CANCELLED
+        else:
+            # Обычная логика
+            order.status = update_status(order)
+        
         db.add(order)
 
         if is_buy and order.price:
