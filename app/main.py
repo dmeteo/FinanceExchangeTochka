@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import FileResponse
 from api.routers import (
     public,
     balance,
@@ -14,7 +15,7 @@ app = FastAPI(title="API Tochka", version="0.1.0")
 
 app.add_middleware(LoggingMiddleware)
 
-@app.get("/health")
+@app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok"}
 

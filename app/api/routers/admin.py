@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.schemas.common import Ok
 from core.schemas.balance import BalanceOperation
@@ -15,6 +16,10 @@ from uuid import UUID
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
+
+@router.get("/logs", include_in_schema=False)
+async def get_logs(admin: User = Depends(require_admin)):
+    return FileResponse("/app/requests.log")
 
 @router.delete("/user/{user_id}", response_model=User)
 async def delete_user(
